@@ -60,61 +60,135 @@ class _EditorScreenState extends State<EditorScreen> {
 void _showAddMetadataDialog() {
   final keyController = TextEditingController();
   final valueController = TextEditingController();
+  String? selectedFieldType;
+
+  final List<String> fieldTypes = [
+    'string',
+    'number',
+    'boolean',
+    'color',
+    'length',
+    'url',
+  ];
 
   showDialog(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Add Metadata'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: keyController,
-            decoration: const InputDecoration(labelText: 'Key (without custom_)'),
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Add Metadata'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: keyController,
+              decoration: const InputDecoration(labelText: 'Key (without custom_)'),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              decoration: const InputDecoration(labelText: 'Field Type'),
+              value: selectedFieldType,
+              items: fieldTypes.map((type) {
+                return DropdownMenuItem(
+                  value: type,
+                  child: Text(type),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  selectedFieldType = value;
+                  valueController.clear();
+                });
+              },
+            ),
+            const SizedBox(height: 10),
+            if (selectedFieldType != null) _buildValueField(selectedFieldType!, valueController),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
-          TextField(
-            controller: valueController,
-            decoration: const InputDecoration(labelText: 'Value'),
+          TextButton(
+            onPressed: () {
+              final rawKey = keyController.text.trim();
+              final value = valueController.text.trim();
+
+              if (rawKey.isNotEmpty && value.isNotEmpty) {
+                final key = "custom_$rawKey";
+                final typeKey = "custom_${rawKey}_type";
+
+                textControllers[key] = TextEditingController(text: value);
+                textControllers[typeKey] = TextEditingController(text: selectedFieldType);
+
+                setState(() {
+                  editableMetadata[key] = value;
+                  editableMetadata[typeKey] = selectedFieldType!;
+
+                  for (var element in svgDocument.findAllElements('path')) {
+                    element.setAttribute(key, value);
+                    element.setAttribute(typeKey, selectedFieldType!);
+                  }
+
+                  updatedSvgString = svgDocument.toXmlString(pretty: true);
+                  debugPrint(updatedSvgString, wrapWidth: 1024);
+                });
+
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Add'),
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () {
-            final rawKey = keyController.text.trim();
-            final value = valueController.text.trim();
-
-            if (rawKey.isNotEmpty && value.isNotEmpty) {
-              final key = "custom_$rawKey";
-
-              //final value1 = value.replaceAll('"', "'"); // Prevent XML-breaking double quotes
-              textControllers[key] = TextEditingController(text: value);
-              setState(() {
-                editableMetadata[key] = value;
-
-                for (var element in svgDocument.findAllElements('path')) {
-                  element.setAttribute(key, value); // Always set (adds new or updates existing)
-                }
-
-                updatedSvgString = svgDocument.toXmlString(pretty: true);
-                print("printing");
-                debugPrint(updatedSvgString, wrapWidth: 1024);
-              });
-
-              //print("Updated SVG:\n$updatedSvgString"); // Debug log
-              Navigator.pop(context);
-            }
-          },
-          child: const Text('Add'),
-        ),
-      ],
     ),
   );
 }
+
+Widget _buildValueField(String? type, TextEditingController valueController) {
+  switch (type) {
+    case 'number':
+      return TextField(
+        controller: valueController,
+        keyboardType: TextInputType.number,
+        decoration: const InputDecoration(labelText: 'Value (Number)'),
+      );
+    case 'boolean':
+      return DropdownButtonFormField<String>(
+        value: valueController.text.isEmpty ? null : valueController.text,
+        decoration: const InputDecoration(labelText: 'Value (Boolean)'),
+        items: const [
+          DropdownMenuItem(value: 'true', child: Text('True')),
+          DropdownMenuItem(value: 'false', child: Text('False')),
+        ],
+        onChanged: (val) {
+          valueController.text = val ?? '';
+        },
+      );
+    case 'color':
+      return TextField(
+        controller: valueController,
+        decoration: const InputDecoration(labelText: 'Value (Hex or color name)'),
+      );
+    case 'url':
+      return TextField(
+        controller: valueController,
+        keyboardType: TextInputType.url,
+        decoration: const InputDecoration(labelText: 'Value (URL)'),
+      );
+    case 'length':
+      return TextField(
+        controller: valueController,
+        decoration: const InputDecoration(labelText: 'Value (e.g. 10px, 5%)'),
+      );
+    default:
+      return TextField(
+        controller: valueController,
+        decoration: const InputDecoration(labelText: 'Value'),
+      );
+  }
+}
+
 
 
   void _saveSvg() async {
@@ -180,4 +254,5 @@ void _showAddMetadataDialog() {
       ),
     );
   }
+
 }
