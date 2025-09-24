@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'package:auto_route/annotations.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_template/presentation/base/page/base_page.dart';
 import 'package:flutter_template/presentation/base/widgets/theme/theme_picker/theme_picker.dart';
+import 'package:flutter_template/presentation/destinations/svg_map/view/svg_map_screen.dart';
 import 'package:flutter_template/presentation/destinations/weather/home/home_screen.dart';
 import 'package:flutter_template/presentation/destinations/weather/home/home_screen_intent.dart';
 import 'package:flutter_template/presentation/destinations/weather/home/home_screen_state.dart';
@@ -49,21 +51,36 @@ class HomePage extends ConsumerWidget {
         const ThemePicker(),
       ],
       body: const HomePageBody(),
-      floatingActionButton: FloatingActionButton(onPressed: ()async{
-          final ImagePicker picker = ImagePicker();
-          final XFile? image =
-              await picker.pickImage(source: ImageSource.gallery);
-          if (image != null && image.path.endsWith('.svg')) {
-            final svgString = await File(image.path).readAsString();
-            await ref.read(svgProvider.notifier).addSVG(svgString);
-            context.mounted?ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text(
-              "Image loaded successfully",
-              style:
-                  TextStyle(color: Colors.white,),
-            ))):null;
-          }
-        },child: const Icon(Icons.add),),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _pickAndLoadSvg(context),
+        child: const Icon(Icons.add),
+      ),
     );
+  }
+}
+
+Future<void> _pickAndLoadSvg(BuildContext context) async {
+  try {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['svg'],
+    );
+
+    if (result != null && result.files.single.bytes != null) {
+      final fileBytes = result.files.single.bytes!;
+      final svgString = String.fromCharCodes(fileBytes);
+      if (context.mounted) {
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => SvgMapScreen(svgString: svgString)));
+      }
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading file: $e')),
+      );
+    }
   }
 }
