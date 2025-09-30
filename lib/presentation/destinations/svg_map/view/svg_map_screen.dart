@@ -3,6 +3,7 @@ import 'package:xml/xml.dart';
 
 import '../model/custom_attribute.dart';
 import '../model/map_part.dart';
+import '../utils/mobile_utils.dart';
 import 'widgets/svg_path_widget.dart';
 
 class SvgMapScreen extends StatefulWidget {
