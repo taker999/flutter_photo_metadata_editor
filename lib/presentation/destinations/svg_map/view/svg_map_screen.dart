@@ -21,13 +21,12 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
 
   double _svgWidth = 1.0;
   double _svgHeight = 1.0;
-
   String? _svgContent;
 
   final Map<String, TextEditingController> _controllers = {};
-
-  // Single custom attribute
   CustomAttribute _customAttribute = CustomAttribute();
+  final ScrollController _listScrollController = ScrollController();
+  final double _fixedItemHeight = 53.0;
 
   @override
   void initState() {
@@ -38,6 +37,7 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
   @override
   void dispose() {
     _controllers.forEach((_, controller) => controller.dispose());
+    _listScrollController.dispose();
     super.dispose();
   }
 
@@ -94,6 +94,19 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
     setState(() {
       _selectedPart = part;
     });
+    _scrollToSelectedItem(part.id);
+  }
+
+  void _scrollToSelectedItem(String partId) {
+    final index = _mapParts.indexWhere((p) => p.id == partId);
+    if (index != -1) {
+      final scrollOffset = index * _fixedItemHeight;
+      _listScrollController.animateTo(
+        scrollOffset,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   void _saveChanges() {
@@ -102,9 +115,8 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
     final document = XmlDocument.parse(_svgContent!);
     final elementToUpdate = document.findAllElements('path').firstWhere(
           (el) => el.getAttribute('id') == _selectedPart!.id,
-    );
+        );
 
-    // Remove existing custom attributes first
     final attributesToRemove = <String>[];
     for (var attr in elementToUpdate.attributes) {
       if (attr.name.toString().startsWith('custom_')) {
@@ -115,18 +127,15 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
       elementToUpdate.removeAttribute(attrName);
     }
 
-    // Update custom attribute (only if both key and value are non-empty)
     if (_customAttribute.key.isNotEmpty && _customAttribute.value.isNotEmpty) {
       final attrName = 'custom_${_customAttribute.key}';
       elementToUpdate.setAttribute(attrName, _customAttribute.value);
     }
 
     setState(() {
-      // Remove old custom attributes from part
       _selectedPart!.attributes
           .removeWhere((key, value) => key.startsWith('custom_'));
 
-      // Update custom attribute in the part (only if both key and value are non-empty)
       if (_customAttribute.key.isNotEmpty &&
           _customAttribute.value.isNotEmpty) {
         final attrName = 'custom_${_customAttribute.key}';
@@ -136,7 +145,7 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
       _svgContent = document.toXmlString(pretty: true);
     });
 
-    Navigator.of(context).pop(); // Close the dialog
+    Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
           content: Text('Changes applied. Ready to download.'),
@@ -147,24 +156,20 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
   void _showEditDialog() {
     if (_selectedPart == null) return;
 
-    // Clear old controllers
     _controllers.forEach((_, controller) => controller.dispose());
     _controllers.clear();
 
-    // Setup controllers only for ID
     if (_selectedPart!.attributes.containsKey('id')) {
       _controllers['id'] = TextEditingController(text: _selectedPart!.id);
     }
 
-    // Reset custom attribute and populate with existing one if present
     _customAttribute = CustomAttribute();
-
     final existingCustomAttr = _selectedPart!.singleCustomAttribute;
     if (existingCustomAttr != null) {
       final cleanKey = existingCustomAttr.key.replaceFirst('custom_', '');
       _customAttribute = CustomAttribute(
         key: cleanKey,
-        fieldType: 'string', // Default type
+        fieldType: 'string',
         value: existingCustomAttr.value,
       );
     }
@@ -185,7 +190,6 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ID Field (Read-only)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 16.0),
                         child: TextField(
@@ -199,18 +203,13 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 20),
-
-                      // Custom Attribute Section (Single attribute)
                       Text(isEditing ? "Edit Metadata" : "Add Metadata",
                           style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                               color: Colors.tealAccent)),
                       const SizedBox(height: 16),
-
-                      // Single Custom Attribute
                       Card(
                         margin: const EdgeInsets.only(bottom: 16),
                         child: Padding(
@@ -218,7 +217,6 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Key field
                               TextField(
                                 decoration: const InputDecoration(
                                   labelText: 'Key (without custom_)',
@@ -235,8 +233,6 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
                                       offset: _customAttribute.key.length),
                               ),
                               const SizedBox(height: 12),
-
-                              // Field Type dropdown
                               DropdownButtonFormField<String>(
                                 decoration: const InputDecoration(
                                   labelText: 'Field Type',
@@ -260,8 +256,6 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
                                 },
                               ),
                               const SizedBox(height: 12),
-
-                              // Value field
                               TextField(
                                 decoration: const InputDecoration(
                                   labelText: 'Value',
@@ -277,9 +271,9 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
                                   ..selection = TextSelection.collapsed(
                                       offset: _customAttribute.value.length),
                                 keyboardType:
-                                _customAttribute.fieldType == 'number'
-                                    ? TextInputType.number
-                                    : TextInputType.text,
+                                    _customAttribute.fieldType == 'number'
+                                        ? TextInputType.number
+                                        : TextInputType.text,
                               ),
                             ],
                           ),
@@ -338,7 +332,6 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
     );
   }
 
-  // --- Layout for desktop with a list panel ---
   Widget _buildDesktopLayout() {
     return Row(
       children: [
@@ -349,7 +342,6 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
     );
   }
 
-  // --- Layout for mobile with a list panel ---
   Widget _buildMobileLayout() {
     return Column(
       children: [
@@ -360,7 +352,6 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
     );
   }
 
-  // --- Widget for displaying the list of SVG parts ---
   Widget _buildPartsListPanel() {
     return Column(
       children: [
@@ -372,6 +363,7 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
         const Divider(),
         Expanded(
           child: ListView.builder(
+            controller: _listScrollController,
             itemCount: _mapParts.length,
             itemBuilder: (context, index) {
               final part = _mapParts[index];
@@ -379,10 +371,10 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
 
               final customAttrsText = part.customAttributes.isNotEmpty
                   ? part.customAttributes.entries
-                  .where((e) => e.value.isNotEmpty)
-                  .map((e) =>
-              "${e.key.replaceFirst('custom_', '')}: ${e.value}")
-                  .join(", ")
+                      .where((e) => e.value.isNotEmpty)
+                      .map((e) =>
+                          "${e.key.replaceFirst('custom_', '')}: ${e.value}")
+                      .join(", ")
                   : null;
 
               return Card(
@@ -392,15 +384,21 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
                     ? Colors.teal.withValues(alpha: 0.2)
                     : Theme.of(context).cardColor,
                 child: ListTile(
-                  title: Text(part.name),
+                  title: Text(
+                    part.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: customAttrsText != null
                       ? Text(
-                    customAttrsText,
-                    style:
-                    const TextStyle(color: Colors.red, fontSize: 14, fontWeight: FontWeight.bold),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  )
+                          customAttrsText,
+                          style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        )
                       : null,
                   onTap: () => _onPartSelected(part),
                   selected: isSelected,
@@ -410,7 +408,6 @@ class _SvgMapScreenState extends State<SvgMapScreen> {
           ),
         ),
         const Divider(height: 1),
-        // --- Conditional Edit/Add Button ---
         Padding(
           padding: const EdgeInsets.all(8.0),
           child: Visibility(

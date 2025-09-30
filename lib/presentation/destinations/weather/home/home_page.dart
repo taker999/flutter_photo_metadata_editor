@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:auto_route/annotations.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart'; // Add this import
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_template/presentation/base/page/base_page.dart';
@@ -64,28 +65,36 @@ Future<void> _pickAndLoadSvg(BuildContext context) async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['svg'],
+      withData: kIsWeb, // Important: ensure bytes are loaded on web
     );
 
-    if (result != null && result.files.single.path != null) {
+    if (result != null && result.files.single != null) {
       String svgString;
 
-      // On web, bytes will be available
-      if (result.files.single.bytes != null) {
-        final fileBytes = result.files.single.bytes!;
+      // On web, use bytes
+      if (kIsWeb) {
+        final fileBytes = result.files.single.bytes;
+        if (fileBytes == null) {
+          throw Exception('Failed to read file bytes on web');
+        }
         svgString = String.fromCharCodes(fileBytes);
       }
-      // On mobile (Android/iOS), we need to read from the file path
+      // On mobile (Android/iOS), read from file path
       else {
-        final file = File(result.files.single.path!);
+        final path = result.files.single.path;
+        if (path == null) {
+          throw Exception('Failed to get file path');
+        }
+        final file = File(path);
         svgString = await file.readAsString();
       }
 
       if (context.mounted) {
         Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (_) => SvgMapScreen(svgString: svgString)
-            )
+          context,
+          MaterialPageRoute(
+            builder: (_) => SvgMapScreen(svgString: svgString),
+          ),
         );
       }
     }
