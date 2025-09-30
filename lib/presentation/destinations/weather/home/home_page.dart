@@ -66,14 +66,27 @@ Future<void> _pickAndLoadSvg(BuildContext context) async {
       allowedExtensions: ['svg'],
     );
 
-    if (result != null && result.files.single.bytes != null) {
-      final fileBytes = result.files.single.bytes!;
-      final svgString = String.fromCharCodes(fileBytes);
+    if (result != null && result.files.single.path != null) {
+      String svgString;
+
+      // On web, bytes will be available
+      if (result.files.single.bytes != null) {
+        final fileBytes = result.files.single.bytes!;
+        svgString = String.fromCharCodes(fileBytes);
+      }
+      // On mobile (Android/iOS), we need to read from the file path
+      else {
+        final file = File(result.files.single.path!);
+        svgString = await file.readAsString();
+      }
+
       if (context.mounted) {
         Navigator.push(
             context,
             MaterialPageRoute(
-                builder: (_) => SvgMapScreen(svgString: svgString)));
+                builder: (_) => SvgMapScreen(svgString: svgString)
+            )
+        );
       }
     }
   } catch (e) {
